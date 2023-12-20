@@ -102,12 +102,8 @@ impl MemorySet {
         }
     }
 
-    fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
-        map_area.map(&mut self.page_table);
-        if let Some(data) = data {
-            map_area.copy_data(&mut self.page_table, data);
-        }
-        self.areas.push(map_area);
+    fn push(&mut self, map_area: MapArea, data: Option<&[u8]>) {
+        self.try_push(map_area, data).unwrap()
     }
 
     fn try_push(
@@ -368,7 +364,7 @@ impl MapArea {
                 ppn = PhysPageNum(vpn.0);
             }
             MapType::Framed => {
-                let frame = frame_alloc().unwrap();
+                let frame = frame_alloc().ok_or(MemoryMapError::AllocFailed)?;
                 ppn = frame.ppn;
                 self.data_frames.insert(vpn, frame);
             }
@@ -384,6 +380,7 @@ impl MapArea {
         }
         page_table.unmap(vpn);
     }
+    #[allow(unused)]
     pub fn map(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
             self.map_one(page_table, vpn);
