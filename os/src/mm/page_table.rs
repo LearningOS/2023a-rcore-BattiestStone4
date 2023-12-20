@@ -4,6 +4,7 @@ use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPag
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
+use core::mem::size_of_val;
 
 bitflags! {
     /// page table entry flags
@@ -170,4 +171,20 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         start = end_va.into();
     }
     v
+}
+
+/// copy data
+pub fn copy_out_data<T: Sized>(token: usize, user_ptr: *const u8, data: &T) {
+    let len = size_of_val(data);
+    if len == 0 { return; }
+    let buffers = translated_byte_buffer(token, user_ptr, len);
+    let data_bytes = unsafe {
+        core::slice::from_raw_parts(data as *const T as *const u8, len)
+    };
+    let mut start = 0;
+    for buffer in buffers {
+        let buffer_len = buffer.len();
+        buffer.copy_from_slice(&data_bytes[start..(start + buffer_len)]);
+        start += buffer_len;
+    }
 }

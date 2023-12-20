@@ -204,7 +204,7 @@ impl StepByOne for VirtPageNum {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 /// a simple range structure for type T
 pub struct SimpleRange<T>
 where
@@ -271,3 +271,14 @@ where
 }
 /// a simple range structure for virtual page number
 pub type VPNRange = SimpleRange<VirtPageNum>;
+
+impl VPNRange {
+    pub fn is_intersecting(&self, other: &VPNRange) -> bool {
+        if other.r <= self.l || other.l >= self.r {
+            false
+        }
+        else {
+            true
+        }
+    }
+}

@@ -39,6 +39,13 @@ pub struct MemorySet {
     areas: Vec<MapArea>,
 }
 
+#[derive(Debug)]
+pub enum MemoryMapError {
+    AllocFailed,
+    InvalidFlag,
+    MemoryAreaNotFound,
+}
+
 impl MemorySet {
     /// Create a new empty `MemorySet`.
     pub fn new_bare() -> Self {
@@ -56,13 +63,45 @@ impl MemorySet {
         &mut self,
         start_va: VirtAddr,
         end_va: VirtAddr,
-        permission: MapPermission,
+        perm: MapPermission,
     ) {
-        self.push(
-            MapArea::new(start_va, end_va, MapType::Framed, permission),
-            None,
-        );
+        self.try_insert_framed_area(start_va, end_va, perm).unwrap()
     }
+    /// try to insert sth haha
+    pub fn try_insert_framed_area(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        perm: MapPermission
+    ) -> Result<(), MemoryMapError> {
+        self.try_push(
+            MapArea::new(start_va, end_va, MapType::Framed, perm),
+            None,
+        )?;
+        Ok(())
+    }
+    /// try_munmap
+    pub fn try_munmap(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr
+    ) -> Result<(), MemoryMapError> {
+        let range: VPNRange = VPNRange::new(start_va.floor(), end_va.ceil());
+        let mut index = self.areas.len();
+        for (i, area) in &mut self.areas.iter_mut().enumerate() {
+            if area.vpn_range == range {
+                area.unmap(&mut self.page_table);
+                index = i;
+            }
+        }
+        if index < self.areas.len() {
+            self.areas.remove(index);
+            Ok(())
+        } else {
+            Err(MemoryMapError::MemoryAreaNotFound)
+        }
+    }
+
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
@@ -70,6 +109,20 @@ impl MemorySet {
         }
         self.areas.push(map_area);
     }
+
+    fn try_push(
+        &mut self, 
+        mut map_area: MapArea, 
+        data: Option<&[u8]>
+    ) -> Result<(), MemoryMapError> {
+        map_area.try_map(&mut self.page_table)?;
+        if let Some(data) = data {
+            map_area.copy_data(&mut self.page_table, data);
+        }
+        self.areas.push(map_area);
+        Ok(())
+    }
+
     /// Mention that trampoline is not collected by areas.
     fn map_trampoline(&mut self) {
         self.page_table.map(
@@ -262,6 +315,18 @@ impl MemorySet {
             false
         }
     }
+
+    ///check an address range is not allocated
+
+    pub fn is_intersecting_with_range(&self, start: VirtPageNum, end: VirtPageNum) -> bool {
+        let range: VPNRange = VPNRange::new(start, end);
+        for area in &self.areas {
+            if area.vpn_range.is_intersecting(&range) {
+                return true;
+            }
+        }
+        false
+    }
 }
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {
@@ -287,7 +352,16 @@ impl MapArea {
             map_perm,
         }
     }
+
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
+        self.try_map_one(page_table, vpn).unwrap();
+    }
+
+    pub fn try_map_one(
+        &mut self, 
+        page_table: &mut PageTable, 
+        vpn: VirtPageNum
+    ) -> Result<(), MemoryMapError> {
         let ppn: PhysPageNum;
         match self.map_type {
             MapType::Identical => {
@@ -299,8 +373,9 @@ impl MapArea {
                 self.data_frames.insert(vpn, frame);
             }
         }
-        let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
+        let pte_flags = PTEFlags::from_bits(self.map_perm.bits).ok_or(MemoryMapError::InvalidFlag)?;
         page_table.map(vpn, ppn, pte_flags);
+        Ok(())
     }
     #[allow(unused)]
     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
@@ -314,6 +389,14 @@ impl MapArea {
             self.map_one(page_table, vpn);
         }
     }
+
+    pub fn try_map(&mut self, page_table: &mut PageTable) -> Result<(), MemoryMapError> {
+        for vpn in self.vpn_range {
+            self.try_map_one(page_table, vpn)?;
+        }
+        Ok(())
+    }
+
     #[allow(unused)]
     pub fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {
