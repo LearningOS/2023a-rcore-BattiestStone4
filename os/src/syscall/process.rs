@@ -91,8 +91,8 @@ pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
     if len == 0 {
         return 0;
     }
-    let start_va: VirtAddr = start.into();
-    let end_va: VirtAddr = (start + len).into();
+    let start_va: VirtAddr = VirtAddr::from(start);
+    let end_va: VirtAddr = VirtAddr::from(start + len);
     let mut map_perm = MapPermission::U;
     if port & 1 == 1 {
         map_perm |= MapPermission::R;

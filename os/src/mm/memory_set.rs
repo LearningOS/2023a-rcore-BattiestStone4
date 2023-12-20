@@ -80,6 +80,11 @@ impl MemorySet {
         )?;
         Ok(())
     }
+
+    fn push(&mut self, map_area: MapArea, data: Option<&[u8]>) {
+        self.try_push(map_area, data).unwrap()
+    }
+    
     /// try_munmap
     pub fn try_munmap(
         &mut self,
@@ -100,10 +105,6 @@ impl MemorySet {
         } else {
             Err(MemoryMapError::MemoryAreaNotFound)
         }
-    }
-
-    fn push(&mut self, map_area: MapArea, data: Option<&[u8]>) {
-        self.try_push(map_area, data).unwrap()
     }
 
     fn try_push(
