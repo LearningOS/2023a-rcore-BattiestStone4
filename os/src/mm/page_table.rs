@@ -4,6 +4,7 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
+use core::mem::size_of_val;
 
 bitflags! {
     /// page table entry flags
@@ -212,4 +213,22 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
         .translate_va(VirtAddr::from(va))
         .unwrap()
         .get_mut()
+}
+
+/// copy_out_data
+pub fn copy_out_data<T: Sized>(token: usize, user_ptr: *const u8, data: &T) {
+    let len = size_of_val(data);
+    if len == 0 {
+        return;
+    }
+    let buffers = translated_byte_buffer(token, user_ptr, len);
+    let data_bytes = unsafe {
+        core::slice::from_raw_parts(data as *const T as *const u8, len)
+    };
+    let mut start = 0;
+    for buffer in buffers {
+        let buffer_len = buffer.len();
+        buffer.copy_from_slice(&data_bytes[start..(start + buffer_len)]);
+        start += buffer_len;
+    }
 }

@@ -22,6 +22,7 @@ mod switch;
 mod task;
 
 use crate::loader::get_app_data_by_name;
+use crate::mm::{VirtAddr, MapPermission};
 use alloc::sync::Arc;
 use lazy_static::*;
 pub use manager::{fetch_task, TaskManager};
@@ -114,4 +115,44 @@ lazy_static! {
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());
+}
+
+/// get_current_time
+pub fn get_current_start_time() -> usize {
+    let task = current_task().unwrap();
+    let task_inner = task.inner_exclusive_access();
+    task_inner.start_time_us.unwrap()
+}
+
+/// get_current_syscall_count
+pub fn get_current_syscall_count(syscall_id: usize) -> u32 {
+    let task = current_task().unwrap();
+    let task_inner = task.inner_exclusive_access();
+    task_inner.get_syscall_count(syscall_id)
+}
+
+/// add_syscall_count
+pub fn add_syscall_count(syscall_id: usize) {
+    let task = current_task().unwrap();
+    let mut task_inner = task.inner_exclusive_access();
+    task_inner.add_syscall_count(syscall_id);
+}
+
+/// mmap
+pub fn mmap(start_va: VirtAddr, end_va: VirtAddr, perm: MapPermission) -> isize {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    inner.mmap(start_va, end_va, perm)
+}
+/// munmap
+pub fn munmap(start_va: VirtAddr, end_va: VirtAddr) -> isize {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    inner.munmap(start_va, end_va)
+}
+/// set task priority
+pub fn set_priority(prio: usize) {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_exclusive_access();
+    inner.priority = prio;
 }
